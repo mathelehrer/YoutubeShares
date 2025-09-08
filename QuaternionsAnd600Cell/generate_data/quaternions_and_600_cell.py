@@ -365,9 +365,23 @@ def detect_edges(elements):
 
     return edges
 
+def detect_faces(edges):
+    faces = []
+    for i in range(len(edges)):
+        for j in range(i+1,len(edges)):
+            for k in range(j+1,len(edges)):
+                edge1 = set(edges[i])
+                edge2 = set(edges[j])
+                edge3 = set(edges[k])
+                all = edge1.union(edge2,edge3)
+                if len(all)==3:
+                    faces.append(list(all))
+    return faces
+
 if __name__ == '__main__':
     elements = list(generate_group())
     vectors = get_4D_vectors()
     edges = detect_edges(elements)
-    print(len(edges))
-    print(edges)
+    print("number of edges ",len(edges))
+    faces = detect_faces(edges)
+    print("number of faces ",len(faces))
