@@ -141,6 +141,9 @@ class QR5:
     def __hash__(self):
         return hash((self.x,self.y))
 
+    def to_float(self):
+        return float(self.x)+float(self.y)*np.sqrt(5)
+
 class FComplex:
     def __init__(self, re:QR5, im:QR5):
         self.re=re
@@ -252,6 +255,9 @@ class FQuaternion:
     def __add__(self,other):
         return FQuaternion(self.a+other.a,self.b+other.b)
 
+    def __sub__(self,other):
+        return FQuaternion(self.a-other.a,self.b-other.b)
+
     def __mul__(self,other):
         """
         Caley-Dickson construction
@@ -291,6 +297,9 @@ class FQuaternion:
 
     def __hash__(self):
         return hash((self.a,self.b))
+
+    def norm(self):
+        return (self*self.conj()).a.re
 
     def to_vector(self):
         return [self.a.re,self.a.im,self.b.re,self.b.im]
@@ -334,6 +343,31 @@ def get_4D_vectors():
         vectors.append(element.to_vector())
     return vectors
 
+def detect_edges(elements):
+    edges = []
+    min_dist = np.inf
+    min = Fraction(0,1)
+    for i in range(len(elements)):
+        for j in range(i+1,len(elements)):
+            norm = (elements[i]-elements[j]).norm()
+            dist = norm.to_float()
+            if dist<min_dist:
+                min_dist = dist
+                min = norm
+
+    print("minimal edge length: ",min)
+
+    for i in range(len(elements)):
+        for j in range(i+1,len(elements)):
+            dist = (elements[i]-elements[j]).norm().to_float()
+            if dist==min_dist:
+                edges.append((i,j))
+
+    return edges
+
 if __name__ == '__main__':
-    for v in get_4D_vectors():
-        print(v)
+    elements = list(generate_group())
+    vectors = get_4D_vectors()
+    edges = detect_edges(elements)
+    print(len(edges))
+    print(edges)
