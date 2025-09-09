@@ -365,29 +365,29 @@ def detect_edges(elements):
 
     return edges
 
-def detect_cells(faces):
+def detect_cells(faces,edges):
     # find to faces with a common edge
     pairs = []
     for i in range(len(faces)):
         for j in range(i+1,len(faces)):
             common = set(faces[i]).intersection(set(faces[j]))
-            if len(common)==2:
+            if len(common)==1:
                 pairs.append((i,j))
 
     print(len(pairs),"pairs")
 
-    # find two pairs that build a tetrahedron
+    # merge to pairs of faces into a cell
     cells = set()
     for i in range(len(pairs)):
         for j in range(i+1,len(pairs)):
-            face1 = faces[pairs[i][0]]
-            face2 = faces[pairs[i][1]]
-            face3 = faces[pairs[j][0]]
-            face4 = faces[pairs[j][1]]
-            union = set(face1+face2+face3+face4)
+            pair_faces = set(pairs[i]+pairs[j])
+            if len(pair_faces)==4:
+                cell_edges = set()
+                for face_index in pair_faces:
+                     cell_edges= cell_edges.union(set([i for i in faces[face_index]]))
 
-            if (len(union)==4):
-                cells.add(tuple(union))
+                if len(cell_edges)==6:
+                    cells.add(tuple(sorted(pair_faces)))
 
     print(len(cells),"cells")
     return cells
@@ -418,15 +418,34 @@ def read(filename):
             data.append(eval(line))
     return data
 
+def compute_equation(cell,faces,edges,vectors):
+    cell_faces = [faces[i] for i in cell]
+    cell_edges = [edges[j] for c in cell_faces for j in c]
+    cell_vertices = [vectors[j] for e in cell_edges for j in e]
+    print(cell_vertices)
+
+
 if __name__ == '__main__':
     elements = list(generate_group())
     vectors = get_4D_vectors()
+
+    # edges in terms of vertices
+
     # edges = detect_edges(elements)
     # save(edges,"edges.data")
     edges = read("edges.data")
     print("number of edges ",len(edges),edges)
-    # faces = detect_faces(edges)
-    # save(faces,"faces.data")
+
+    # faces in terms of edges
+
+    #faces = detect_faces(edges)
+    #save(faces,"faces.data")
     faces = read("faces.data")
     print("number of faces ",len(faces),faces)
-    cells = detect_cells(faces)
+
+    # cells in terms of faces
+    cells = detect_cells(faces,edges)
+    print(len(cells))
+
+    print(cells[0])
+    print(compute_equation(cells[0],faces,edges,vectors))
