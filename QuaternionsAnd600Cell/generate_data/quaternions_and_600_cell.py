@@ -365,6 +365,33 @@ def detect_edges(elements):
 
     return edges
 
+def detect_cells(faces):
+    # find to faces with a common edge
+    pairs = []
+    for i in range(len(faces)):
+        for j in range(i+1,len(faces)):
+            common = set(faces[i]).intersection(set(faces[j]))
+            if len(common)==2:
+                pairs.append((i,j))
+
+    print(len(pairs),"pairs")
+
+    # find two pairs that build a tetrahedron
+    cells = set()
+    for i in range(len(pairs)):
+        for j in range(i+1,len(pairs)):
+            face1 = faces[pairs[i][0]]
+            face2 = faces[pairs[i][1]]
+            face3 = faces[pairs[j][0]]
+            face4 = faces[pairs[j][1]]
+            union = set(face1+face2+face3+face4)
+
+            if (len(union)==4):
+                cells.add(tuple(union))
+
+    print(len(cells),"cells")
+    return cells
+
 def detect_faces(edges):
     faces = []
     for i in range(len(edges)):
@@ -375,13 +402,31 @@ def detect_faces(edges):
                 edge3 = set(edges[k])
                 all = edge1.union(edge2,edge3)
                 if len(all)==3:
-                    faces.append(list(all))
+                    faces.append([i,j,k])
     return faces
+
+def save(data,filename):
+    with open(filename,"w") as f:
+        for d in data:
+            f.write(str(d)+"\n")
+
+
+def read(filename):
+    with open(filename,"r") as f:
+        data = []
+        for line in f:
+            data.append(eval(line))
+    return data
 
 if __name__ == '__main__':
     elements = list(generate_group())
     vectors = get_4D_vectors()
-    edges = detect_edges(elements)
-    print("number of edges ",len(edges))
-    faces = detect_faces(edges)
-    print("number of faces ",len(faces))
+    # edges = detect_edges(elements)
+    # save(edges,"edges.data")
+    edges = read("edges.data")
+    print("number of edges ",len(edges),edges)
+    # faces = detect_faces(edges)
+    # save(faces,"faces.data")
+    faces = read("faces.data")
+    print("number of faces ",len(faces),faces)
+    cells = detect_cells(faces)
