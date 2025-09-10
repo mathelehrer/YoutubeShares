@@ -390,7 +390,7 @@ def detect_cells(faces,edges):
                     cells.add(tuple(sorted(pair_faces)))
 
     print(len(cells),"cells")
-    return cells
+    return list(cells)
 
 def detect_faces(edges):
     faces = []
@@ -419,10 +419,16 @@ def read(filename):
     return data
 
 def compute_equation(cell,faces,edges,vectors):
+    # grap the four vertices of the cell
     cell_faces = [faces[i] for i in cell]
     cell_edges = [edges[j] for c in cell_faces for j in c]
-    cell_vertices = [vectors[j] for e in cell_edges for j in e]
-    print(cell_vertices)
+    cell_vertices = set([tuple(vectors[j]) for e in cell_edges for j in e])
+    matrix = [list(v) for v in cell_vertices]
+
+    center = [sum(e,QR5.from_integers(0,1,0,1))*QR5.from_integers(1,4,0,1) for e in zip(*matrix)]
+    basis = []
+
+
 
 
 if __name__ == '__main__':
@@ -444,8 +450,9 @@ if __name__ == '__main__':
     print("number of faces ",len(faces),faces)
 
     # cells in terms of faces
-    cells = detect_cells(faces,edges)
-    print(len(cells))
+    # cells = detect_cells(faces,edges)
+    # save(cells,"cells.data")
+    cells = read("cells.data")
 
-    print(cells[0])
+    print(len(cells))
     print(compute_equation(cells[0],faces,edges,vectors))
