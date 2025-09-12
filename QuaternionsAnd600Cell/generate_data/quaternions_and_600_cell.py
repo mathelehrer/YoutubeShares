@@ -1,7 +1,10 @@
 # this file parallels the computations of the corresponding mathematica file
 # for the exact generation of the c600 we need to define quaternions over field extensions
+import itertools
 from fractions import Fraction
 import numpy as np
+from sympy.combinatorics import Permutation
+from mathutils import Vector
 
 
 # let's start with field extension Q[r5], which are the rational numbers and the  root of five adjoined
@@ -139,7 +142,7 @@ class QR5:
     def __hash__(self):
         return hash((self.x,self.y))
 
-    def to_float(self):
+    def real(self):
         return float(self.x)+float(self.y)*np.sqrt(5)
 
 class FComplex:
@@ -302,16 +305,9 @@ class FQuaternion:
     def to_vector(self):
         return [self.a.re,self.a.im,self.b.re,self.b.im]
 
-class FVector:
-    def __init__(self, components:list):
-        self.dim = len(components)
-        self.components = components
-
-    def dot(self,other):
-        return sum([a*b for a,b in zip(self.components,other.components)],start=QR5(Fraction(0,1),Fraction(0,1)))
-
 class FTensor:
     def __init__(self,components):
+        components = np.array(components)
         self.components = components
         self.rank = self.get_rank()
         self.dims = self.get_dimensions()
@@ -330,7 +326,7 @@ class FTensor:
 
         :return:
         """
-        return self._get_dimensions(self.components)
+        return self._get_dimensions(self.components.tolist())
 
     def get_rank(self):
         """
@@ -391,11 +387,77 @@ class FTensor:
         >>> product.components.tolist()
         [[[[[(40-4*r5), (-285+19*r5)], [(365-27*r5), (-395-27*r5)]], [[(410+54*r5), (320+44*r5)], [(425+81*r5), (-15-27*r5)]], [[(185+29*r5), (170+78*r5)], [(40-80*r5), (290-10*r5)]]], [[[(14-6*r5), (-94+40*r5)], [(122-52*r5), (-98+40*r5)]], [[(86-34*r5), (66-26*r5)], [(74-28*r5), (12-6*r5)]], [[(36-14*r5), (2+2*r5)], [(60-28*r5), (90-38*r5)]]], [[[(30-2*r5), (-215+7*r5)], [(275-11*r5), (-305-31*r5)]], [[(320+52*r5), (250+42*r5)], [(335+73*r5), (-15-21*r5)]], [[(145+27*r5), (140+64*r5)], [(20-60*r5), 220]]], [[[(6-2*r5), (-41+13*r5)], [(53-17*r5), (-47+11*r5)]], [[(44-8*r5), (34-6*r5)], [(41-5*r5), (3-3*r5)]], [[(19-3*r5), (8+4*r5)], [(20-12*r5), (40-12*r5)]]]], [[[[(28-4*r5), (-198+22*r5)], [(254-30*r5), (-266-6*r5)]], [[(272+24*r5), (212+20*r5)], [(278+42*r5), (-6-18*r5)]], [[(122+14*r5), (104+48*r5)], [(40-56*r5), (200-16*r5)]]], [[[(35-11*r5), (-240+71*r5)], [(310-93*r5), (-280+57*r5)]], [[(265-39*r5), (205-29*r5)], [(250-21*r5), (15-18*r5)]], [[(115-14*r5), (55+27*r5)], [(110-70*r5), (235-65*r5)]]], [[[(26-6*r5), (-181+37*r5)], [(233-49*r5), (-227+19*r5)]], [[(224-4*r5), (174-2*r5)], [(221+11*r5), (3-15*r5)]], [[(99+1*r5), (68+32*r5)], [(60-52*r5), (180-32*r5)]]], [[[(22+2*r5), (-162-20*r5)], [(206+24*r5), (-254-60*r5)]], [[(278+78*r5), (218+62*r5)], [(302+96*r5), (-24-18*r5)]], [[(128+38*r5), (146+66*r5)], [(-20-44*r5), (170+26*r5)]]]], [[[[(-27+7*r5), (187-44*r5)], [(-241+58*r5), (229-28*r5)]], [[(-223+13*r5), (-173+9*r5)], [(-217-2*r5), (-6+15*r5)]], [[(-98+3*r5), (-61-29*r5)], [(-70+54*r5), (-185+39*r5)]]], [[[(-12-4*r5), (92+32*r5)], [(-116-40*r5), (164+64*r5)]], [[(-188-76*r5), (-148-60*r5)], [(-212-88*r5), (24+12*r5)]], [[(-88-36*r5), (-116-52*r5)], [(40+24*r5), (-100-36*r5)]]], [[[(-8-4*r5), (63+31*r5)], [(-79-39*r5), (121+57*r5)]], [[(-142-66*r5), (-112-52*r5)], [(-163-75*r5), (21+9*r5)]], [[(-67-31*r5), (-94-42*r5)], [(40+16*r5), (-70-34*r5)]]], [[[(-51+11*r5), (356-67*r5)], [(-458+89*r5), (452-29*r5)]], [[(-449-1*r5), (-349-3*r5)], [(-446-31*r5), (-3+30*r5)]], [[(-199-6*r5), (-143-67*r5)], [(-110+102*r5), (-355+57*r5)]]]]]
         >>> product.dims
+        [2, 2, 3, 4, 3]
 
         :param other:
         :return:
         """
         return FTensor(np.tensordot(self.components,other.components,axes=0))
+
+    def contract(self,other,axes=[]):
+        return FTensor(np.tensordot(self.components,other.components,axes=axes))
+
+    def __neg__(self):
+        return FTensor(-self.components)
+
+    def __str__(self):
+        return str(self.components.tolist())
+    def __repr__(self):
+        return str(self.components.tolist())
+
+    def __sub__(self,other):
+        return FTensor(self.components-other.components)
+
+    def __add__(self,other):
+        return FTensor(self.components+other.components)
+
+
+class FVector(FTensor):
+    def __init__(self, components:list):
+        self.dim = len(components)
+        super().__init__(components)
+
+    def dot(self,other)->QR5:
+        """
+        >>> a = FVector([QR5.from_integers(1,1,0,1), QR5.from_integers(1,2,2,1)])
+        >>> a.dot(a)
+        (85/4+2*r5)
+
+
+        :param other:
+        :return:
+        """
+        return np.tensordot(self.components,other.components,axes=1).tolist()
+
+    def norm(self):
+        return self.dot(self)
+
+    def __sub__(self,other):
+        return FVector(self.components-other.components)
+
+    def __add__(self,other):
+        return FVector(self.components+other.components)
+
+    def real(self):
+        return Vector([self.components[i].real() for i in range(self.dim)])
+
+
+class EpsilonTensor(FTensor):
+    def __init__(self,rank):
+        n = rank**rank
+        comps = []
+        for i in range(n):
+            comps.append(QR5.from_integers(0,1,0,1))
+        comps = np.array(comps)
+        comps.shape = (rank,)*rank
+        permutations =  list(itertools.permutations(range(rank)))
+        for permutation in permutations:
+            p = Permutation(permutation)
+            comps[permutation] = QR5.from_integers(p.signature(),1,0,1)
+
+        super().__init__(comps.tolist())
+
+
 
 def generate_group():
     # generate 120 elements of the 600 cell
@@ -442,7 +504,7 @@ def detect_edges(elements):
     for i in range(len(elements)):
         for j in range(i+1,len(elements)):
             norm = (elements[i]-elements[j]).norm()
-            dist = norm.to_float()
+            dist = norm.real()
             if dist<min_dist:
                 min_dist = dist
                 min = norm
@@ -451,7 +513,7 @@ def detect_edges(elements):
 
     for i in range(len(elements)):
         for j in range(i+1,len(elements)):
-            dist = (elements[i]-elements[j]).norm().to_float()
+            dist = (elements[i]-elements[j]).norm().real()
             if dist==min_dist:
                 edges.append((i,j))
 
@@ -502,7 +564,6 @@ def save(data,filename):
         for d in data:
             f.write(str(d)+"\n")
 
-
 def read(filename):
     with open(filename,"r") as f:
         data = []
@@ -511,16 +572,84 @@ def read(filename):
     return data
 
 def compute_equation(cell,faces,edges,vectors):
+    """
+    The normal vector is computed as the dual of the tri-vector that is spanned by the four vertices of the cell.
+    Then the hyper-plane is given by the equation n.x=n.x1
+
+    :param cell:
+    :param faces:
+    :param edges:
+    :param vectors:
+    :return:
+    """
+    # grap the four vertices of the cell
+    cell_faces = [faces[i] for i in cell]
+    cell_edges = [edges[j] for c in cell_faces for j in c]
+    cell_vertex_indices = set([i for e in cell_edges for i in e])
+    cell_vertices = set([tuple(vectors[j]) for e in cell_edges for j in e])
+
+    fvectors = []
+    for vertex in cell_vertices:
+        fvectors.append(FVector(vertex))
+        print(fvectors[-1].norm())
+
+    fbasis =[]
+    for i in range(1,len(fvectors)):
+        fbasis.append(fvectors[i]-fvectors[0])
+        print(fbasis[-1])
+
+    # create tensor product from the basis
+    tensor = FTensor(fbasis[0].components)
+    tensor *=FTensor(fbasis[1].components)
+    tensor *=FTensor(fbasis[2].components)
+
+    epsilon = EpsilonTensor(4)
+
+    n = epsilon.contract(tensor,axes=[[1,2,3],[0,1,2]])
+
+    # consistency check
+    # print((n.contract(fbasis[0],axes=[[0],[0]])).components)
+    # print((n.contract(fbasis[1],axes=[[0],[0]])).components)
+    # print((n.contract(fbasis[2],axes=[[0],[0]])).components)
+
+    # make sure that the normal vector is pointing outwards
+    for i in range(len(vectors)):
+        if i not in cell_vertex_indices:
+            point = FVector(vectors[i])
+            if n.contract(point,axes=[[0],[0]]).components.tolist().real() < 0:
+                n =-n
+            break
+
+    # we cannot normalize the normal vector within the field, we store its length
+    # go to float coordinates
+
+    return [n.components.tolist(),n.contract(fvectors[0],axes=[[0],[0]]).components.tolist()]
+
+def compute_projection(vectors,equation,cell, faces,edges,offset):
+    """
+    here the projection onto the cell is performed.
+    This repeats computations that I did for the video of the 600 cell.
+
+
+
+    :param vectors:
+    :param equation:
+    :param offset:
+    :return:
+    """
+
+    # turn into floats
+    normal = Vector([c.real() for c in equation[0]])
+    normal.normalize()
+
     # grap the four vertices of the cell
     cell_faces = [faces[i] for i in cell]
     cell_edges = [edges[j] for c in cell_faces for j in c]
     cell_vertices = set([tuple(vectors[j]) for e in cell_edges for j in e])
-    matrix = [list(v) for v in cell_vertices]
+    cell_vertices = [Vector([float(c.real())  for c in vector]) for vector in cell_vertices]
 
-    center = [sum(e,QR5.from_integers(0,1,0,1))*QR5.from_integers(1,4,0,1) for e in zip(*matrix)]
-    basis = []
-
-
+    cell_center = sum(cell_vertices,Vector([0,0,0,0]))/len(cell_vertices)
+    print(cell_center)
 
 
 if __name__ == '__main__':
@@ -546,5 +675,11 @@ if __name__ == '__main__':
     # save(cells,"cells.data")
     cells = read("cells.data")
 
-    print(len(cells))
-    print(compute_equation(cells[0],faces,edges,vectors))
+    # compute the equation for the cell that the polytope is projected onto
+    equation = compute_equation(cells[0],faces,edges,vectors)
+    print(equation)
+
+    # check that normal is pointing outwards
+    print(cells[0])
+
+    projected_vectors = compute_projection(vectors,equation,cells[0],faces,edges,0.5)
