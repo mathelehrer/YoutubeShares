@@ -3,6 +3,7 @@
 import itertools
 from fractions import Fraction
 import numpy as np
+from mpmath import chop
 from sympy.combinatorics import Permutation
 from mathutils import Vector
 
@@ -411,7 +412,6 @@ class FTensor:
     def __add__(self,other):
         return FTensor(self.components+other.components)
 
-
 class FVector(FTensor):
     def __init__(self, components:list):
         self.dim = len(components)
@@ -441,7 +441,6 @@ class FVector(FTensor):
     def real(self):
         return Vector([self.components[i].real() for i in range(self.dim)])
 
-
 class EpsilonTensor(FTensor):
     def __init__(self,rank):
         n = rank**rank
@@ -457,12 +456,16 @@ class EpsilonTensor(FTensor):
 
         super().__init__(comps.tolist())
 
-
-
 def generate_group():
     # generate 120 elements of the 600 cell
-    omega=gen_a = FQuaternion.from_vector(QR5.from_integers(-1,2,0,1),QR5.from_integers(1,2,0,1),QR5.from_integers(1,2,0,1),QR5.from_integers(1,2,0,1))
-    q=gen_b = FQuaternion.from_vector(QR5.from_integers(0,1,0,1),QR5.from_integers(1,2,0,1),QR5.from_integers(1,4,1,4),QR5.from_integers(-1,4,1,4))
+    omega=gen_a = FQuaternion.from_vector(QR5.from_integers(-1,2,0,1),
+                                          QR5.from_integers(1,2,0,1),
+                                          QR5.from_integers(1,2,0,1),
+                                          QR5.from_integers(1,2,0,1))
+    q=gen_b = FQuaternion.from_vector(QR5.from_integers(0,1,0,1),
+                                      QR5.from_integers(1,2,0,1),
+                                      QR5.from_integers(1,4,1,4),
+                                      QR5.from_integers(-1,4,1,4))
     print(gen_a)
     print(gen_b)
     # check group constraints
@@ -591,12 +594,10 @@ def compute_equation(cell,faces,edges,vectors):
     fvectors = []
     for vertex in cell_vertices:
         fvectors.append(FVector(vertex))
-        print(fvectors[-1].norm())
 
     fbasis =[]
     for i in range(1,len(fvectors)):
         fbasis.append(fvectors[i]-fvectors[0])
-        print(fbasis[-1])
 
     # create tensor product from the basis
     tensor = FTensor(fbasis[0].components)
@@ -608,6 +609,8 @@ def compute_equation(cell,faces,edges,vectors):
     n = epsilon.contract(tensor,axes=[[1,2,3],[0,1,2]])
 
     # consistency check
+    # print("Consistency check for normal vector:")
+    # print(cell_vertex_indices)
     # print((n.contract(fbasis[0],axes=[[0],[0]])).components)
     # print((n.contract(fbasis[1],axes=[[0],[0]])).components)
     # print((n.contract(fbasis[2],axes=[[0],[0]])).components)
@@ -625,6 +628,87 @@ def compute_equation(cell,faces,edges,vectors):
 
     return [n.components.tolist(),n.contract(fvectors[0],axes=[[0],[0]]).components.tolist()]
 
+def get_rotation_matrix(normal):
+    """
+    WARNING: llm-generated!!!!
+    this function computes the rotation matrix that rotates a generic four-dimensional normal vector to the form (0,0,0,1)
+
+    Note:
+    - The matrix is an orthonormal rotation (determinant +1).
+    - Rotations preserve length. Therefore, this maps the direction of (a,b,c,d) to the +w-axis.
+      The image of (a,b,c,d) will be (0,0,0,||(a,b,c,d)||). If you need exactly (0,0,0,1),
+      pass a unit-length vector.
+
+    :param normal: iterable of 4 scalars; each item may be a number or provide .real()
+    :return: 4x4 numpy array representing the rotation matrix
+    """
+
+    # Convert to floats, supporting objects that implement .real()
+    def to_float(x):
+        # Objects in this project often provide a .real() method returning a float
+        if hasattr(x, "real") and not isinstance(x, (int, float)):
+            return float(x.real())
+        return float(x)
+
+    v = np.array([to_float(x) for x in normal], dtype=float).reshape(4)
+    norm = np.linalg.norm(v)
+    if norm == 0.0:
+        raise ValueError("Cannot build a rotation for the zero vector.")
+
+    # Build rotation as a product of Givens rotations that zero a, b, c in order,
+    # leaving all steps as proper rotations (det = +1).
+    R = np.eye(4, dtype=float)
+
+    def givens(i, j, x, y):
+        """
+        Return a 4x4 Givens rotation acting on coordinates (i, j) that maps [y, x] -> [0, hypot(x,y)].
+        Specifically, it zeroes the 'y' component while preserving norm.
+        """
+        r = (x * x + y * y) ** 0.5
+        if r == 0.0:
+            return np.eye(4, dtype=float)
+        c = x / r
+        s = -y / r
+        G = np.eye(4, dtype=float)
+        G[i, i] = c
+        G[j, j] = c
+        G[i, j] = s
+        G[j, i] = -s
+        return G
+
+    # Step 1: zero c using plane (2,3) acting on (c,d)
+    G1 = givens(2, 3, v[3], v[2])
+    v = G1 @ v
+    R = G1 @ R
+
+    # Step 2: zero b using plane (1,3) acting on (b,d')
+    G2 = givens(1, 3, v[3], v[1])
+    v = G2 @ v
+    R = G2 @ R
+
+    # Step 3: zero a using plane (0,3) acting on (a,d'')
+    G3 = givens(0, 3, v[3], v[0])
+    v = G3 @ v
+    R = G3 @ R
+
+    # Ensure the final d component is positive (rotate by pi in (0,3) plane if needed).
+    if v[3] < 0.0:
+        G4 = np.eye(4, dtype=float)
+        G4[0, 0] = -1.0
+        G4[3, 3] = -1.0
+        v = G4 @ v
+        R = G4 @ R
+
+    # R @ original_vector == [0,0,0, ||original_vector||]
+    test = R@normal
+    test = [round(comp,6) for comp in test]
+    if test!= [0,0,0,1]:
+        print(test)
+        raise ValueError("Rotation matrix does not map normal vector to (0,0,0,1). "
+                         "Maybe there is an error in the llm-generated code of this function")
+
+    return R
+
 def compute_projection(vectors,equation,cell, faces,edges,offset):
     """
     here the projection onto the cell is performed.
@@ -638,18 +722,50 @@ def compute_projection(vectors,equation,cell, faces,edges,offset):
     :return:
     """
 
-    # turn into floats
+    # turn into floats and normalize
+    # warning the built-in function doesn't normalize the fourth component
     normal = Vector([c.real() for c in equation[0]])
-    normal.normalize()
+    n = normal.dot(normal)**0.5
+    normal = normal/n
 
     # grap the four vertices of the cell
     cell_faces = [faces[i] for i in cell]
     cell_edges = [edges[j] for c in cell_faces for j in c]
+    cell_vertex_indices = set([j for e in cell_edges for j in e])
     cell_vertices = set([tuple(vectors[j]) for e in cell_edges for j in e])
     cell_vertices = [Vector([float(c.real())  for c in vector]) for vector in cell_vertices]
 
     cell_center = sum(cell_vertices,Vector([0,0,0,0]))/len(cell_vertices)
-    print(cell_center)
+    # construct focal point
+    focus = cell_center+normal*(offset*(cell_center-cell_vertices[0]).length)
+
+    transformed_vectors = []
+    # iterate over all points to transform
+    for i in range(len(vectors)):
+        if i not in cell_vertex_indices:  # skip vectors of projection cell
+            v = Vector([v.real() for v in vectors[i]])
+            alpha = (cell_center-v).dot(normal)/(focus-v).dot(normal)
+            transformed_vector = (focus*alpha)+(v*(1-alpha))
+            transformed_vectors.append(transformed_vector)
+        else:
+            v = Vector([v.real() for v in vectors[i]])
+            transformed_vectors.append(v)
+
+    print("consistency check, all the following values should be of equal size")
+    print(all([float(chop((t-cell_center).dot(normal),1e-6))==0 for i,t in enumerate(transformed_vectors)]))
+
+    print("consistency check, all the following values should be of equal size")
+    print(all([float(chop((t-cell_center).dot(normal),1e-6))==0 for i,t in enumerate(transformed_vectors)]))
+
+    # shift center of the cell to the origin
+    shifted_vertices = [t-cell_center for t in transformed_vectors]
+
+    # rotate all vectors into a 3D coordinate sub space
+    matrix = get_rotation_matrix(normal)
+    print(matrix@normal)
+
+    rotated_vertices = [matrix@v for v in shifted_vertices]
+    return rotated_vertices
 
 
 if __name__ == '__main__':
@@ -677,9 +793,5 @@ if __name__ == '__main__':
 
     # compute the equation for the cell that the polytope is projected onto
     equation = compute_equation(cells[0],faces,edges,vectors)
-    print(equation)
 
-    # check that normal is pointing outwards
-    print(cells[0])
-
-    projected_vectors = compute_projection(vectors,equation,cells[0],faces,edges,0.5)
+    projected_vectors = compute_projection(vectors,equation,cells[0],faces,edges,0.05)
